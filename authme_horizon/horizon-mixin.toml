@@ -1,0 +1,61 @@
+# AuthMe for Horizon: a port of AuthMeReloaded (https://github.com/AuthMe/AuthMeReloaded,
+# GPL-3.0, by the AuthMe team) to Horizon's native mods. Server side only: build it into a
+# dedicated-server engine with `horizon-launcher native-build <this folder> --server-output DIR`.
+[mod]
+id = "authme"
+version = "0.1.0"
+
+# The Horizon commit it was built and checked on. The two injections below target the game's
+# own functions (not catalog hook points), so the mod is pinned to this revision.
+[compatibility]
+horizon_revision = "fdc87aecdbd116bf1e08adcd062fcbaea8c2e2ca"
+
+# The rules and every catalog hook (login, commands, clicks, damage, ticks): a trait mod.
+[api]
+path = "api"
+
+# Who may chat and drop items, shared by the two injections below and the trait mod.
+[[module]]
+id = "gate"
+file = "crates/horizon-client/src/client_lib.rs"
+name = "authme_gate"
+source = "gate.rs"
+visibility = "pub"
+
+# A chat message (not a command) from a player not logged in never reaches anyone.
+[[injection]]
+id = "chat"
+target = "horizon_client_lib::lan::hub::chat::Hub::handle_chat"
+kind = "HEAD"
+cancellable = true
+helper = "chat.rs"
+bindings = [
+  { name = "hub", ty = "&Hub", value = "&*self" },
+  { name = "i", ty = "usize", value = "i" },
+]
+
+# The drop key: a player not logged in keeps the stack in their hand.
+[[injection]]
+id = "drop"
+target = "horizon_client::game::Game<'_>::drop_held"
+kind = "HEAD"
+cancellable = true
+helper = "drop.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+]
+
+# A player the network is about to admit: the address they connect from, for sessions (the
+# catalog's login hooks carry no address), and a second login under the name of a logged-in
+# player turned away instead of kicking them.
+[[injection]]
+id = "admit"
+target = "horizon_client_lib::lan::Shared::try_admit"
+kind = "HEAD"
+cancellable = true
+helper = "admit.rs"
+bindings = [
+  { name = "address", ty = "std::net::SocketAddr", value = "address" },
+  { name = "uuid", ty = "u128", value = "uuid" },
+  { name = "shared", ty = "&Shared", value = "&*self" },
+]
